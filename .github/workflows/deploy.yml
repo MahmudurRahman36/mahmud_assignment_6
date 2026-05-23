@@ -21,20 +21,14 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup SSH
-      env:
-        SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+    - name: Setup SSH Agent
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+    - name: Configure SSH to skip host key checking
       run: |
         mkdir -p ~/.ssh
-        python3 -c '
-        import os
-        key = os.environ["SSH_KEY"].replace("\r\n", "\n").strip() + "\n"
-        with open(os.path.expanduser("~/.ssh/id_rsa"), "w") as f:
-            f.write(key)
-        '
-        chmod 600 ~/.ssh/id_rsa
-        
-        # Disable strict host key checking to prevent interaction prompts
         cat >> ~/.ssh/config <<EOF
         Host *
           StrictHostKeyChecking no
@@ -45,7 +39,7 @@ jobs:
     - name: Verify SSH Connectivity to Bastion Host
       run: |
         echo "Testing SSH connection to Bastion Host..."
-        ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_BASTION_HOST }} "echo 'Connected successfully to Bastion Host!'"
+        ssh ubuntu@${{ secrets.EC2_BASTION_HOST }} "echo 'Connected successfully to Bastion Host!'"
 
     - name: Deploy Backend (Private Subnet)
       run: |
@@ -53,7 +47,7 @@ jobs:
         echo "Deploying Backend EC2 via Bastion Host"
         echo "=========================================="
         
-        ssh -i ~/.ssh/id_rsa -J ubuntu@${{ secrets.EC2_BASTION_HOST }} ubuntu@${{ secrets.EC2_BACKEND_HOST }} << 'ENDSSH'
+        ssh -J ubuntu@${{ secrets.EC2_BASTION_HOST }} ubuntu@${{ secrets.EC2_BACKEND_HOST }} << 'ENDSSH'
           set -e
           
           # Load Node Version Manager (NVM) or export Node path
@@ -116,7 +110,7 @@ jobs:
         echo "Deploying Frontend EC2 via Bastion Host"
         echo "=========================================="
         
-        ssh -i ~/.ssh/id_rsa -J ubuntu@${{ secrets.EC2_BASTION_HOST }} ubuntu@${{ secrets.EC2_FRONTEND_HOST }} << 'ENDSSH'
+        ssh -J ubuntu@${{ secrets.EC2_BASTION_HOST }} ubuntu@${{ secrets.EC2_FRONTEND_HOST }} << 'ENDSSH'
           set -e
           
           # Fresh checkout or git pull
