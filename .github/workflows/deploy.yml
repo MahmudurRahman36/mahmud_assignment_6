@@ -26,7 +26,13 @@ jobs:
         SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
       run: |
         mkdir -p ~/.ssh
-        echo "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+        if echo "$SSH_KEY" | grep -q "---BEGIN"; then
+          echo "[INFO] Loading plain-text SSH key..."
+          echo "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+        else
+          echo "[INFO] Loading base64-encoded SSH key..."
+          echo "$SSH_KEY" | base64 -d > ~/.ssh/id_rsa
+        fi
         chmod 600 ~/.ssh/id_rsa
         
         # Disable strict host key checking to prevent interaction prompts
