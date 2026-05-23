@@ -90,7 +90,7 @@ jobs:
             for sql_file in migrations/*.sql; do
               if [ -f "$sql_file" ]; then
                 echo "Applying: $(basename $sql_file)"
-                PGPASSWORD='${{ secrets.DB_PASSWORD }}' psql -h ${{ secrets.DB_PRIVATE_IP }} -U ${{ env.DB_USER }} -d ${{ env.DB_NAME }} -f "$sql_file" || echo "Warning: migration might have run already."
+                PGPASSWORD='${{ secrets.DB_PASSWORD }}' psql -h ${{ secrets.DB_PRIVATE_IP }} -U ${{ env.DB_USER }} -d ${{ env.DB_NAME }} -f "$sql_file"
               fi
             done
           fi

@@ -74,7 +74,7 @@ module "db" {
   name               = "${var.project_name}-${var.environment}-db"
   role               = "database"
   instance_type      = "t2.micro"
-  subnet_id          = module.vpc.private_db_subnet_ids[0]
+  subnet_id          = module.vpc.private_app_subnet_ids[0]
   security_group_ids = [module.security_groups.rds_sg_id]
   key_name           = var.key_name
 
