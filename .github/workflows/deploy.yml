@@ -65,6 +65,9 @@ jobs:
             git reset --hard origin/main
           fi
           
+          # Force ownership to ubuntu user to prevent EACCES permission errors
+          sudo chown -R ubuntu:ubuntu ${{ env.DEPLOY_PATH }}
+          
           cd ${{ env.DEPLOY_PATH }}/backend
           
           # Install Node packages
@@ -123,6 +126,9 @@ jobs:
             git fetch origin
             git reset --hard origin/main
           fi
+          
+          # Force ownership to ubuntu user to prevent EACCES permission errors
+          sudo chown -R ubuntu:ubuntu ${{ env.DEPLOY_PATH }}
           
           cd ${{ env.DEPLOY_PATH }}/frontend
           
