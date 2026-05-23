@@ -167,3 +167,13 @@ jobs:
           echo "FAILURE: Application returned status $HTTP_STATUS. Please verify target groups and security groups."
           exit 1
         fi
+
+    - name: Print Debug Logs on Failure
+      if: failure()
+      run: |
+        echo "=========================================="
+        echo "DEPLOYMENT FAILED: Fetching Remote Logs..."
+        echo "=========================================="
+        echo "--- Backend PM2 Status & Logs ---"
+        ssh -J ubuntu@${{ secrets.EC2_BASTION_HOST }} ubuntu@${{ secrets.EC2_BACKEND_HOST }} "export PM2_HOME=/home/ubuntu/.pm2; pm2 status; pm2 logs bmi-backend --lines 100 --nostream" || true
+
