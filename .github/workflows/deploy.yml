@@ -26,13 +26,12 @@ jobs:
         SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
       run: |
         mkdir -p ~/.ssh
-        if echo "$SSH_KEY" | grep -q "BEGIN"; then
-          echo "[INFO] Loading plain-text SSH key..."
-          echo "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-        else
-          echo "[INFO] Loading base64-encoded SSH key..."
-          echo "$SSH_KEY" | base64 -d > ~/.ssh/id_rsa
-        fi
+        python3 -c '
+        import os
+        key = os.environ["SSH_KEY"].replace("\r\n", "\n").strip() + "\n"
+        with open(os.path.expanduser("~/.ssh/id_rsa"), "w") as f:
+            f.write(key)
+        '
         chmod 600 ~/.ssh/id_rsa
         
         # Disable strict host key checking to prevent interaction prompts
