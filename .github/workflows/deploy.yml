@@ -1,0 +1,162 @@
+name: Deploy to AWS 3-Tier Architecture
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DEPLOY_PATH: /home/ubuntu/bmi-health-tracker
+  FRONTEND_DEPLOY_PATH: /var/www/html
+  DB_NAME: bmidb
+  DB_USER: bmi_user
+  NODE_VERSION: '18.x'
+
+jobs:
+  deploy:
+    name: Build & Deploy via Bastion Host
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        
+        # Disable strict host key checking to prevent interaction prompts
+        cat >> ~/.ssh/config <<EOF
+        Host *
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+        EOF
+        chmod 600 ~/.ssh/config
+
+    - name: Verify SSH Connectivity to Bastion Host
+      run: |
+        echo "Testing SSH connection to Bastion Host..."
+        ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_BASTION_HOST }} "echo 'Connected successfully to Bastion Host!'"
+
+    - name: Deploy Backend (Private Subnet)
+      run: |
+        echo "=========================================="
+        echo "Deploying Backend EC2 via Bastion Host"
+        echo "=========================================="
+        
+        ssh -i ~/.ssh/id_rsa -J ubuntu@${{ secrets.EC2_BASTION_HOST }} ubuntu@${{ secrets.EC2_BACKEND_HOST }} << 'ENDSSH'
+          set -e
+          
+          # Load Node Version Manager (NVM) or export Node path
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" || true
+          
+          # Fresh checkout or git pull
+          if [ ! -d "${{ env.DEPLOY_PATH }}" ]; then
+            echo "Cloning repository..."
+            git clone https://github.com/${{ github.repository }}.git ${{ env.DEPLOY_PATH }}
+          else
+            echo "Updating repository..."
+            cd ${{ env.DEPLOY_PATH }}
+            git fetch origin
+            git reset --hard origin/main
+          fi
+          
+          cd ${{ env.DEPLOY_PATH }}/backend
+          
+          # Install Node packages
+          echo "Installing dependencies..."
+          npm install --production
+          
+          # Re-write .env with target database connection
+          echo "Creating environment file..."
+          cat > .env <<EOF
+          NODE_ENV=production
+          PORT=3000
+          DATABASE_URL=postgresql://${{ env.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_PRIVATE_IP }}:5432/${{ env.DB_NAME }}
+          FRONTEND_URL=http://${{ secrets.ALB_DNS_NAME }}
+          EOF
+          chmod 600 .env
+          
+          # Run database migrations
+          echo "Running migrations..."
+          if [ -d "migrations" ]; then
+            for sql_file in migrations/*.sql; do
+              if [ -f "$sql_file" ]; then
+                echo "Applying: $(basename $sql_file)"
+                PGPASSWORD='${{ secrets.DB_PASSWORD }}' psql -h ${{ secrets.DB_PRIVATE_IP }} -U ${{ env.DB_USER }} -d ${{ env.DB_NAME }} -f "$sql_file" || echo "Warning: migration might have run already."
+              fi
+            done
+          fi
+          
+          # Process Control via PM2
+          echo "Restarting application with PM2..."
+          if pm2 describe bmi-backend > /dev/null 2>&1; then
+            pm2 restart bmi-backend --update-env
+          else
+            pm2 start src/server.js --name bmi-backend
+            pm2 save
+          fi
+          
+          echo "Backend deployment completed!"
+        ENDSSH
+
+    - name: Deploy Frontend (Private Subnet)
+      run: |
+        echo "=========================================="
+        echo "Deploying Frontend EC2 via Bastion Host"
+        echo "=========================================="
+        
+        ssh -i ~/.ssh/id_rsa -J ubuntu@${{ secrets.EC2_BASTION_HOST }} ubuntu@${{ secrets.EC2_FRONTEND_HOST }} << 'ENDSSH'
+          set -e
+          
+          # Fresh checkout or git pull
+          if [ ! -d "${{ env.DEPLOY_PATH }}" ]; then
+            echo "Cloning repository..."
+            git clone https://github.com/${{ github.repository }}.git ${{ env.DEPLOY_PATH }}
+          else
+            echo "Updating repository..."
+            cd ${{ env.DEPLOY_PATH }}
+            git fetch origin
+            git reset --hard origin/main
+          fi
+          
+          cd ${{ env.DEPLOY_PATH }}/frontend
+          
+          # Install dependencies and build React app
+          echo "Installing dependencies..."
+          npm install
+          
+          echo "Building production bundles..."
+          npm run build
+          
+          # Deploy files to Nginx web root
+          echo "Copying distribution bundles to Nginx root..."
+          sudo rm -rf ${{ env.FRONTEND_DEPLOY_PATH }}/*
+          sudo cp -r dist/* ${{ env.FRONTEND_DEPLOY_PATH }}/
+          sudo chown -R www-data:www-data ${{ env.FRONTEND_DEPLOY_PATH }}
+          
+          # Restart Nginx
+          echo "Reloading Nginx web server..."
+          sudo systemctl reload nginx
+          
+          echo "Frontend deployment completed!"
+        ENDSSH
+
+    - name: Health Check (Verify via Load Balancer)
+      run: |
+        echo "=========================================="
+        echo "Performing App Verification via ALB"
+        echo "=========================================="
+        sleep 5
+        
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "http://${{ secrets.ALB_DNS_NAME }}/health" || echo "000")
+        echo "ALB Health Endpoint Status: $HTTP_STATUS"
+        if [ "$HTTP_STATUS" = "200" ]; then
+          echo "SUCCESS: 3-Tier Application is online and routing properly!"
+        else
+          echo "FAILURE: Application returned status $HTTP_STATUS. Please verify target groups and security groups."
+          exit 1
+        fi
