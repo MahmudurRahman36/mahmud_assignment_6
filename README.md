@@ -1,10 +1,14 @@
-# Premium 3-Tier AWS Architecture — IaC, CI/CD, and Full-Stack Telemetry
-
-This repository contains the complete modular implementation for the **DevOps Module 6 Assignment**. The project automates the creation of a highly secure, high-availability, 3-tier AWS cloud infrastructure using **Terraform (IaC)**, sets up a secure pipeline using **GitHub Actions (CI/CD)** with SSH ProxyJump, and deploys a comprehensive **Telemetry & Monitoring Stack (Prometheus, Grafana, Loki)**.
+# Ostad DevOps Batch 11 — Assignment Module 6
+### Project Title: Modular 3-Tier AWS Architecture (IaC, CI/CD, and Full-Stack Telemetry)
+**Engineer**: Mahmudur Rahman  
+**Assignment Reference**: `ostad_batch_11_mahmud` (Key Pair: `ostad_batch_11_mahmud`)
 
 ---
 
-## 📐 Enterprise Architecture Diagram
+## 📐 1. System Architecture Diagrams
+
+### A. Modular 3-Tier Infrastructure Flowchart
+The following diagram illustrates the physical topology of the AWS VPC, indicating the boundary isolation of public and private subnets, security group boundaries, load-balancer routing, and telemetric scraping loops:
 
 ```mermaid
 graph TD
@@ -68,89 +72,69 @@ graph TD
     Grafana -->|Query Logs| Loki
 ```
 
----
+### B. Component Connectivity & Control Flow Sequence
+The sequence diagram below displays the lifecycle of an user request (routing statically and dynamically) and the remote DevOps management control path:
 
-## 🗃️ Component Catalogue & Architectural Roles
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as 🌐 End User
+    actor Engineer as 💻 DevOps Engineer
+    participant ALB as ⚖️ Application Load Balancer
+    participant Bastion as 🛡️ Bastion Host
+    participant FE as 🖥️ Frontend EC2 (Nginx)
+    participant BE as ⚙️ Backend EC2 (PM2 Node)
+    participant DB as 🗄️ Database EC2 (PostgreSQL)
 
-Our premium 3-tier architecture isolates each layer into its own secure networking domain, utilizing the following core components:
-
-### 1. Networking & Perimeter
-* **AWS Custom VPC (`10.0.0.0/16`)**: The primary boundary isolating all resources. It isolates public assets (ALB, Bastion) from private resources (Frontend, Backend, Database).
-* **Internet Gateway (IGW)**: Connects the VPC to the public internet, enabling ingress to the ALB and Bastion, and egress for public subnets.
-* **NAT Gateway**: Resides in the public subnet, allowing private EC2 instances (Frontend and Backend) to securely reach the internet to fetch npm modules and packages on boot, while completely preventing the public internet from initiating connection directly to them.
-
-### 2. Compute Tier (Private & Secure)
-* **Frontend Instance (Vite + React + Nginx)**:
-  * **Role**: Serves the user interface static bundles.
-  * **Role in Security**: Resides in the private app subnet. Ingress is strictly locked down via Security Groups to accept HTTP traffic **only** from the Application Load Balancer. Direct access from the internet is impossible.
-* **Backend Instance (Node.js Express + PM2)**:
-  * **Role**: Runs the API service.
-  * **Role in Security**: Resides in the private app subnet. Ingress is restricted via Security Groups to accept port `3000` traffic **only** from the Application Load Balancer. It manages DB queries and exposes business telemetry endpoints.
-* **Database Instance (EC2 Private PostgreSQL)**:
-  * **Role**: Private stateful repository holding application schemas and user records.
-  * **Role in Security**: Deployed in a private subnet, bypassing managed AWS RDS subnet constraints. Security groups permit inbound port `5432` traffic **only** from the Backend instance. It has no route to the internet, keeping user data safe.
-
-### 3. Traffic Management
-* **Application Load Balancer (ALB)**:
-  * **Role**: Public-facing entry point. Evaluates incoming request paths on port 80:
-    * `/api/*` and `/health` are routed directly to the Backend EC2 Target Group on Port `3000`.
-    * All other requests (e.g. `/`) default to the Frontend EC2 Target Group on Port `80`.
-* **Bastion Host (Public SSH Gateway)**:
-  * **Role**: The single secure bridge to manage the private resources. SSH access to Frontend, Backend, and DB nodes requires hopping through the Bastion host via **SSH ProxyJump (`-J`)**.
-
-### 4. Telemetry & Monitoring Suite (Co-located on Bastion)
-* **Prometheus (`:9090`)**: Scraping daemon that pulls telemetry data from all exporters on a 15-second loop.
-* **Grafana (`:3001`)**: Premium visualization tool loaded with customized dashboards, querying metrics from Prometheus and logs from Loki.
-* **Grafana Loki (`:3100`)**: High-performance log aggregation engine.
-* **Telemetry Exporters**:
-  * **Node Exporter (`:9100`)**: Measures system stats (CPU, memory, disk, network) of the EC2 hosts.
-  * **Nginx Exporter (`:9113`)**: Monitors active Nginx connections, requests/second, and server performance.
-  * **PostgreSQL Exporter (`:9187`)**: Connects remotely to the DB instance from the Backend host to gather active connections, transaction volumes, and query statistics.
-  * **BMI App Exporter (`:9091`)**: Scraping agent that monitors active backend sessions and application business metrics.
-  * **Promtail (`:9080`)**: Resides on app nodes to capture Nginx, PM2, and system syslog outputs and stream them continuously to Loki.
-
----
-
-## 📂 Repository Layout
-
-```
-mahmud_assignment_6/
-├── .github/
-│   └── workflows/
-│       └── deploy.yml              # CI/CD pipeline using SSH ProxyJump (-J) and remote origin fixes
-├── src/
-│   ├── frontend/                   # React Vite application
-│   ├── backend/                    # Express Node.js application
-│   └── database/                   # PostgreSQL schema and SQL migrations
-├── terraform/
-│   ├── modules/
-│   │   ├── vpc/                    # Modular network stack (Subnets, NAT GW, IGW)
-│   │   ├── security-group/         # Security groups for Bastion, ALB, Frontend, Backend, RDS
-│   │   ├── alb/                    # Public ALB (HTTP port 80, path-based routing rules)
-│   │   └── ec2/                    # EC2 instances with user_data bootstrapper
-│   └── environments/
-│       └── prod/
-│           ├── main.tf             # Composition orchestrator
-│           ├── variables.tf        # Input variable definitions
-│           ├── outputs.tf          # Output IP/DNS addresses
-│           └── terraform.tfvars    # Environment configurations (Default ap-south-1)
-├── monitoring/
-│   ├── exporters/                  # Exporter configurations
-│   ├── 3-tier-app/
-│   │   ├── config/                 # Prometheus config, Loki config, and Alert rules
-│   │   ├── dashboards/             # Preloaded telemetry dashboards
-│   │   └── scripts/
-│   │       ├── setup-monitoring-server.sh # Automation setup script for Monitoring server
-│   │       └── setup-application-server.sh  # Automation setup script for Exporters
-│   └── README.md                   # Telemetry guides
-└── README.md                       # Comprehensive system architecture & description
+    %% Admin & deployment flow
+    Engineer->>Bastion: SSH Connection (Port 22)
+    Engineer->>Bastion: ProxyJump SSH to FE & BE (Port 22)
+    
+    %% Ingress and Data Flow
+    Client->>ALB: HTTP Request (Port 80)
+    alt Default Routing /*
+        ALB->>FE: Forward Traffic (Port 80)
+        Note over FE: Serves React Static Bundle
+        FE-->>Client: Returns HTML/JS/CSS (via ALB)
+    else API Routing /api/* or /health
+        ALB->>BE: Forward Traffic (Port 3000)
+        BE->>DB: PostgreSQL Query (Port 5432)
+        DB-->>BE: Query Result (Port 5432)
+        BE-->>Client: Returns JSON Data (via ALB)
+    end
 ```
 
 ---
 
-## 📝 Subnet Allocation & Networking Details
+## 🗃️ 2. Core Components & Security Catalog
 
-Our VPC segregates public and private traffic cleanly across multiple Availability Zones:
+Our architecture splits system duties across three secure layers with strict ingress controls:
+
+### 1. Networking Infrastructure
+* **AWS Custom VPC (`10.0.0.0/16`)**: Segregates public ingress nodes from private execution tiers.
+* **Internet Gateway (IGW)**: Direct boundary adapter bridging our VPC to the public Internet.
+* **NAT Gateway**: Resides inside the public subnet, allowing backend and frontend servers in private subnets to pull npm modules and libraries outbound while blocking incoming public requests.
+
+### 2. Physical Nodes (Compute Tier)
+* **Frontend Node (Nginx, Port 80)**: Serves static Vite React packages. Security groups accept port 80 traffic **only** from the ALB security group.
+* **Backend Node (Node.js Express + PM2, Port 3000)**: Coordinates business rules. Security groups accept port 3000 traffic **only** from the ALB.
+* **Database Node (EC2 PostgreSQL 14, Port 5432)**: Dedicated private instance. Inbound traffic is accepted on port 5432 **only** from the Backend security group. All outbound routes are locked down.
+
+### 3. Load Balancing & Perimeter Security
+* **Application Load Balancer (ALB)**: The sole public gateway for the app. Handles ingress traffic on port 80 and splits it cleanly:
+  * `/api/*` & `/health` route to the Backend target group.
+  * All other requests (e.g. `/`) fallback to the Frontend target group.
+* **Bastion Host (Public Gateway)**: Acts as an isolated SSH entry point. SSH traffic to Backend, Frontend, and DB servers is configured to ProxyJump through the Bastion host.
+
+### 4. Full Telemetry & Logging Suite
+* **Prometheus (`:9090`)**: Telemetry server that pulls data from exporters on a 15-second loop.
+* **Grafana (`:3001`)**: Premium visualization suite showing system stats and logs.
+* **Grafana Loki (`:3100`) & Promtail (`:9080`)**: Continuous log shippers aggregating Nginx, PM2, and system messages into Loki.
+* **Exporters**: Node Exporter (`:9100`), Nginx Exporter (`:9113`), PostgreSQL Exporter (`:9187`, connecting remotely using the backend's database URL), and Custom BMI App Exporter (`:9091`).
+
+---
+
+## 📝 3. VPC Subnet Allocation
 
 | Subnet Name | CIDR Block | Route Table | Availability Zone | Primary Resources |
 | :--- | :--- | :--- | :--- | :--- |
@@ -163,8 +147,76 @@ Our VPC segregates public and private traffic cleanly across multiple Availabili
 
 ---
 
-## 🧑‍💻 Author
-**Mahmudur Rahman**  
-*DevOps Engineer Trainee*  
-Ostad Batch 11  
-Key Pair Reference: `ostad_batch_11_mahmud`
+## 🛠️ 4. Setup & Deployment Guide
+
+Follow these steps to deploy, configure, and initialize the modular infrastructure:
+
+### Phase 1: Local Infrastructure Provisioning (Terraform)
+1. Open your terminal and navigate to:
+   ```bash
+   cd terraform/environments/prod
+   ```
+2. Initialize and apply the modular configuration:
+   ```bash
+   terraform init
+   ```
+   ```bash
+   terraform apply -auto-approve
+   ```
+3. Copy the output IP addresses and ALB DNS endpoint.
+
+### Phase 2: GitHub Secrets Configuration
+Configure **5 Actions Repository Secrets** under **Settings > Secrets and Variables > Actions > Secrets** using your Terraform outputs:
+* `EC2_BASTION_HOST`: The public IP of the Bastion host (`13.235.103.126`).
+* `EC2_BACKEND_HOST`: The private IP of the Backend node (`10.0.3.72`).
+* `EC2_FRONTEND_HOST`: The private IP of the Frontend node (`10.0.4.242`).
+* `DB_PRIVATE_IP`: The private IP of the Database node (`10.0.3.180`).
+* `ALB_DNS_NAME`: The ALB DNS name (`mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com`).
+* `EC2_SSH_KEY`: The raw content of your `ostad_batch_11_mahmud.pem` private key.
+* `DB_PASSWORD`: The database password.
+
+### Phase 3: Triggering CI/CD Pipeline
+Push the codebase to GitHub to trigger automated deployment:
+```bash
+git add .
+git commit -m "feat: complete modular architecture, deploy workflows and telemetry exporters"
+git push origin main
+```
+The workflow will dynamically:
+1. Update the Git remote origins of the target hosts to point to your repository.
+2. Build Vite React packages and deploy to the Frontend web server.
+3. Start Backend Express endpoints under PM2 and execute database migrations.
+4. Set up Prometheus, Grafana, Loki on the Bastion Host.
+5. Deploy and start Node, Nginx, PostgreSQL Exporter and Promtail log shippers.
+6. Verify and output target statuses.
+
+---
+
+## 🌐 5. Verified Active URLs
+
+* **Application Website**: [http://mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com](http://mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com)
+* **Application Health Endpoint**: [http://mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com/health](http://mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com/health)
+* **Grafana Telemetry Dashboard**: [http://13.235.103.126:3001](http://13.235.103.126:3001) *(Login: `admin` / `admin`)*
+* **Prometheus Targets Console**: [http://13.235.103.126:9090](http://13.235.103.126:9090)
+
+---
+
+## 📸 6. Evidence of Successful Deployment
+
+Below are the screenshot proofs confirming the fully functional modular deployment, successful GitHub Actions pipeline, active Prometheus scrapers, and operational Grafana dashboards:
+
+### A. Successful GitHub Actions Pipeline Run
+Confirming compilation, delivery, and verification completed without a single error:
+![GitHub Actions Run](Screenshot/Successfull_Github_Action_Run.png)
+
+### B. Functional Web Application
+The deployed 3-tier BMI Health Tracker running dynamically via the AWS Ingress Load Balancer:
+![Web Application](Screenshot/Working_Web_Project.png)
+
+### C. Active Prometheus Targets Scraper
+All 9 targets (Node Exporter, Nginx, Database, custom app) reported as **UP** on port `9090`:
+![Prometheus Targets](Screenshot/Working_Prometheus.png)
+
+### D. Loaded Grafana Dashboard
+Visualizing infrastructure CPU, network bandwidth, memory, active Nginx requests, and database transactions on port `3001`:
+![Grafana Dashboard](Screenshot/Working_Grafana.png)
