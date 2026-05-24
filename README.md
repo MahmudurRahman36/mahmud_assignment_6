@@ -167,11 +167,11 @@ Follow these steps to deploy, configure, and initialize the modular infrastructu
 
 ### Phase 2: GitHub Secrets Configuration
 Configure **5 Actions Repository Secrets** under **Settings > Secrets and Variables > Actions > Secrets** using your Terraform outputs:
-* `EC2_BASTION_HOST`: The public IP of the Bastion host (`13.235.103.126`).
-* `EC2_BACKEND_HOST`: The private IP of the Backend node (`10.0.3.72`).
-* `EC2_FRONTEND_HOST`: The private IP of the Frontend node (`10.0.4.242`).
-* `DB_PRIVATE_IP`: The private IP of the Database node (`10.0.3.180`).
-* `ALB_DNS_NAME`: The ALB DNS name (`mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com`).
+* `EC2_BASTION_HOST`: The public IP of the Bastion host (`52.66.207.103`).
+* `EC2_BACKEND_HOST`: The private IP of the Backend node (`10.0.3.226`).
+* `EC2_FRONTEND_HOST`: The private IP of the Frontend node (`10.0.4.123`).
+* `DB_PRIVATE_IP`: The private IP of the Database node (`10.0.3.114`).
+* `ALB_DNS_NAME`: The ALB DNS name (`mahmud-health-prod-alb-2034490923.ap-south-1.elb.amazonaws.com`).
 * `EC2_SSH_KEY`: The raw content of your `ostad_batch_11_mahmud.pem` private key.
 * `DB_PASSWORD`: The database password.
 
@@ -194,10 +194,10 @@ The workflow will dynamically:
 
 ## 🌐 5. Verified Active URLs
 
-* **Application Website**: [http://mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com](http://mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com)
-* **Application Health Endpoint**: [http://mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com/health](http://mahmud-health-prod-alb-1003916145.ap-south-1.elb.amazonaws.com/health)
-* **Grafana Telemetry Dashboard**: [http://13.235.103.126:3001](http://13.235.103.126:3001) *(Login: `admin` / `admin`)*
-* **Prometheus Targets Console**: [http://13.235.103.126:9090](http://13.235.103.126:9090)
+* **Application Website**: [http://mahmud-health-prod-alb-2034490923.ap-south-1.elb.amazonaws.com](http://mahmud-health-prod-alb-2034490923.ap-south-1.elb.amazonaws.com)
+* **Application Health Endpoint**: [http://mahmud-health-prod-alb-2034490923.ap-south-1.elb.amazonaws.com/health](http://mahmud-health-prod-alb-2034490923.ap-south-1.elb.amazonaws.com/health)
+* **Grafana Telemetry Dashboard**: [http://52.66.207.103:3001](http://52.66.207.103:3001) *(Login: `admin` / `admin`)*
+* **Prometheus Targets Console**: [http://52.66.207.103:9090](http://52.66.207.103:9090)
 
 ---
 
