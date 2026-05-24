@@ -151,7 +151,7 @@ get_ec2_private_ip() {
 
 # Banner
 display_banner() {
-    clear
+    clear || true
     echo -e "${GREEN}"
     cat << "EOF"
 ╔══════════════════════════════════════════════════════════════════╗
