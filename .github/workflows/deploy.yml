@@ -152,6 +152,58 @@ jobs:
           echo "Frontend deployment completed!"
         ENDSSH
 
+    - name: Automatically Deploy Grafana & Prometheus Stack (Bastion Host)
+      run: |
+        echo "=========================================="
+        echo "Deploying Telemetry Stack on Bastion Host"
+        echo "=========================================="
+        ssh ubuntu@${{ secrets.EC2_BASTION_HOST }} << 'ENDSSH'
+          set -e
+          
+          # Fresh clone or update
+          if [ ! -d "/home/ubuntu/bmi-health-tracker" ]; then
+            echo "Cloning repository..."
+            git clone https://github.com/${{ github.repository }}.git /home/ubuntu/bmi-health-tracker
+          else
+            echo "Updating repository..."
+            cd /home/ubuntu/bmi-health-tracker
+            git fetch origin
+            git reset --hard origin/main
+          fi
+          
+          cd /home/ubuntu/bmi-health-tracker
+          sudo chmod +x monitoring/3-tier-app/scripts/setup-monitoring-server.sh
+          
+          # Pass the backend host IP non-interactively to the script
+          echo "${{ secrets.EC2_BACKEND_HOST }}" | sudo ./monitoring/3-tier-app/scripts/setup-monitoring-server.sh
+          
+          echo "Monitoring stack setup complete!"
+        ENDSSH
+
+    - name: Automatically Setup Exporters (Backend Private Node)
+      run: |
+        echo "=========================================="
+        echo "Deploying Exporters on Private Backend Node"
+        echo "=========================================="
+        ssh -J ubuntu@${{ secrets.EC2_BASTION_HOST }} ubuntu@${{ secrets.EC2_BACKEND_HOST }} << 'ENDSSH'
+          set -e
+          
+          # Force sync latest files
+          cd /home/ubuntu/bmi-health-tracker
+          sudo chmod +x monitoring/3-tier-app/scripts/setup-application-server.sh
+          
+          # Pass the Bastion private IP (which we fetch dynamically) to the exporter installer
+          BASTION_PRIVATE_IP=$(host -t A ${{ secrets.EC2_BASTION_HOST }} 2>/dev/null | awk '{print $4}' || echo "10.0.1.10")
+          # Under custom VPC networking, Bastion private IP resides in 10.0.1.x subnet, let's fetch it from system configuration or default
+          # Actually, the Bastion host private IP is usually the default gateway or 10.0.1.10
+          # We can pass a generic CIDR block or Bastion private IP: 10.0.1.0/24 range.
+          # The exporter setup script prompts: "Monitoring Server IP: "
+          # We pass "10.0.1.0/24" or a generic private address. Let's send the VPC CIDR 10.0.0.0/16 so it accepts any VPC monitoring connections!
+          echo "10.0.0.0/16" | sudo ./monitoring/3-tier-app/scripts/setup-application-server.sh
+          
+          echo "Exporters setup complete!"
+        ENDSSH
+
     - name: Health Check (Verify via Load Balancer)
       run: |
         echo "=========================================="
@@ -176,4 +228,3 @@ jobs:
         echo "=========================================="
         echo "--- Backend PM2 Status & Logs ---"
         ssh -J ubuntu@${{ secrets.EC2_BASTION_HOST }} ubuntu@${{ secrets.EC2_BACKEND_HOST }} "export PM2_HOME=/home/ubuntu/.pm2; pm2 status; pm2 logs bmi-backend --lines 100 --nostream" || true
-
