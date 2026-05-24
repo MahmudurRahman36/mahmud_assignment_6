@@ -907,7 +907,7 @@ final_verification() {
     
     log_step "Checking service status..."
     
-    declare -a services=("node_exporter" "postgres_exporter" "nginx_exporter" "bmi-backend" "promtail")
+    declare -a services=("node_exporter" "postgres_exporter" "nginx_exporter" "promtail")
     
     for service in "${services[@]}"; do
         if systemctl is-active --quiet "$service"; then
@@ -918,12 +918,19 @@ final_verification() {
         fi
     done
     
-    # Check PM2 process
+    # Check PM2 processes
     ORIGINAL_USER=$(get_original_user)
     if sudo -u "$ORIGINAL_USER" pm2 list | grep -q "bmi-app-exporter.*online"; then
         log_success "bmi-app-exporter (PM2) is running"
     else
         log_error "bmi-app-exporter (PM2) is NOT running"
+        all_good=false
+    fi
+
+    if sudo -u "$ORIGINAL_USER" pm2 list | grep -q "bmi-backend.*online"; then
+        log_success "bmi-backend (PM2) is running"
+    else
+        log_error "bmi-backend (PM2) is NOT running"
         all_good=false
     fi
     
