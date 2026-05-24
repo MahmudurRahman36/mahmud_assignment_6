@@ -72,12 +72,12 @@ graph TD
         end
         
         subgraph Private_App_Subnets ["Private App Subnets (10.0.3.0/24 & 10.0.4.0/24)"]
-            Frontend[🖥️ Frontend EC2 (Nginx) - 10.0.4.123]
-            Backend[⚙️ Backend EC2 (PM2 Node) - 10.0.3.226]
+            Frontend["🖥️ Frontend EC2 (Nginx) - 10.0.4.123"]
+            Backend["⚙️ Backend EC2 (PM2 Node) - 10.0.3.226"]
         end
 
         subgraph Private_DB_Subnet ["Private Subnet (10.0.3.0/24)"]
-            DB[🗄️ EC2 Private Database (PostgreSQL) - 10.0.3.114]
+            DB["🗄️ EC2 Private Database (PostgreSQL) - 10.0.3.114"]
         end
         
     end
