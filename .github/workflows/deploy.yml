@@ -59,8 +59,10 @@ jobs:
             echo "Cloning repository..."
             git clone https://github.com/${{ github.repository }}.git ${{ env.DEPLOY_PATH }}
           else
-            echo "Updating repository..."
+            echo "Updating remote origin to user repository..."
             cd ${{ env.DEPLOY_PATH }}
+            git remote set-url origin https://github.com/${{ github.repository }}.git || true
+            echo "Updating repository..."
             git fetch origin
             git reset --hard origin/main
           fi
@@ -68,7 +70,7 @@ jobs:
           # Force ownership to ubuntu user to prevent EACCES permission errors
           sudo chown -R ubuntu:ubuntu ${{ env.DEPLOY_PATH }}
           
-          cd ${{ env.DEPLOY_PATH }}/backend
+          cd ${{ env.DEPLOY_PATH }}/src/backend
           
           # Install Node packages
           echo "Installing dependencies..."
@@ -121,8 +123,10 @@ jobs:
             echo "Cloning repository..."
             git clone https://github.com/${{ github.repository }}.git ${{ env.DEPLOY_PATH }}
           else
-            echo "Updating repository..."
+            echo "Updating remote origin to user repository..."
             cd ${{ env.DEPLOY_PATH }}
+            git remote set-url origin https://github.com/${{ github.repository }}.git || true
+            echo "Updating repository..."
             git fetch origin
             git reset --hard origin/main
           fi
@@ -130,7 +134,7 @@ jobs:
           # Force ownership to ubuntu user to prevent EACCES permission errors
           sudo chown -R ubuntu:ubuntu ${{ env.DEPLOY_PATH }}
           
-          cd ${{ env.DEPLOY_PATH }}/frontend
+          cd ${{ env.DEPLOY_PATH }}/src/frontend
           
           # Install dependencies and build React app
           echo "Installing dependencies..."
@@ -165,8 +169,10 @@ jobs:
             echo "Cloning repository..."
             git clone https://github.com/${{ github.repository }}.git /home/ubuntu/bmi-health-tracker
           else
-            echo "Updating repository..."
+            echo "Updating remote origin to user repository..."
             cd /home/ubuntu/bmi-health-tracker
+            git remote set-url origin https://github.com/${{ github.repository }}.git || true
+            echo "Updating repository..."
             git fetch origin
             git reset --hard origin/main
           fi
