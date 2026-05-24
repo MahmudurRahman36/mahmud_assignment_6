@@ -274,6 +274,8 @@ SELECT id, weight_kg, height_cm, bmi, measurement_date FROM measurements ORDER B
 ### C. Visual Evidence
 
 ````carousel
+![Successful Terraform Execution](Screenshot/Successful_Teraform_Execution.png)
+<!-- slide -->
 ![GitHub Actions Run](Screenshot/Successfull_Github_Action_Run.png)
 <!-- slide -->
 ![Web Application UI](Screenshot/Working_Web_Project.png)
@@ -283,10 +285,11 @@ SELECT id, weight_kg, height_cm, bmi, measurement_date FROM measurements ORDER B
 ![Grafana Live Telemetry](Screenshot/Working_Grafana.png)
 ````
 
-1. **Successful CI/CD Pipeline**: GitHub Actions executes every task in under 2 minutes, completing database migrations, server deployments, and load-balancer status verifications with 0 errors.
-2. **Dynamic UI App**: The React application runs via the Application Load Balancer endpoint, calculating indices and storing health history records instantly in PostgreSQL.
-3. **Operational Prometheus Targets**: All 9 scrape loops (including Node, Nginx, PostgreSQL, and custom app exporters) report as **UP** on port `9090`.
-4. **Grafana Dashboards**: Real-time graphs visualize server CPU, memory, active Nginx routing connections, and log streams securely processed via Promtail.
+1. **Successful Terraform Provisioning**: The Infrastructure-as-Code modules initialized, validated, and deployed the 3-tier AWS infrastructure automatically with zero resource conflicts or errors.
+2. **Successful CI/CD Pipeline**: GitHub Actions executes every task in under 2 minutes, completing database migrations, server deployments, and load-balancer status verifications with 0 errors.
+3. **Dynamic UI App**: The React application runs via the Application Load Balancer endpoint, calculating indices and storing health history records instantly in PostgreSQL.
+4. **Operational Prometheus Targets**: All 9 scrape loops (including Node, Nginx, PostgreSQL, and custom app exporters) report as **UP** on port `9090`.
+5. **Grafana Dashboards**: Real-time graphs visualize server CPU, memory, active Nginx routing connections, and log streams securely processed via Promtail.
 
 ---
 
