@@ -276,42 +276,8 @@ install_pm2() {
 
 # Check and install PostgreSQL if not present
 check_postgresql() {
-    if command -v psql &> /dev/null; then
-        PG_VERSION=$(psql --version | awk '{print $3}')
-        log_info "PostgreSQL is already installed: $PG_VERSION"
-        
-        # Check if PostgreSQL service is running
-        if systemctl is-active --quiet postgresql; then
-            log_success "PostgreSQL service is running"
-            return 0
-        else
-            log_warning "PostgreSQL is installed but not running"
-            log_step "Starting PostgreSQL service..."
-            systemctl start postgresql
-            systemctl enable postgresql
-            log_success "PostgreSQL service started"
-            return 0
-        fi
-    fi
-    
-    log_warning "PostgreSQL is not installed"
-    log_info "This script requires PostgreSQL to be installed and configured"
-    log_info "Installing PostgreSQL..."
-    
-    # Install PostgreSQL
-    DEBIAN_FRONTEND=noninteractive apt install -y -qq postgresql postgresql-contrib
-    
-    # Start and enable service
-    systemctl start postgresql
-    systemctl enable postgresql
-    
-    if command -v psql &> /dev/null; then
-        PG_VERSION=$(psql --version | awk '{print $3}')
-        log_success "PostgreSQL $PG_VERSION installed successfully"
-    else
-        log_error "PostgreSQL installation failed"
-        exit 1
-    fi
+    log_info "PostgreSQL Client check: psql is installed. Skipping local database server installation (using remote database)."
+    return 0
 }
 
 # Check and install Nginx if not present
@@ -458,36 +424,23 @@ install_postgres_exporter() {
     log_step "Creating PostgreSQL user..."
     useradd --no-create-home --shell /bin/false postgres_exporter 2>/dev/null || true
     
-    log_step "Creating PostgreSQL monitoring user in database..."
+    log_step "Reading Database connection from Backend configuration..."
+    DATABASE_URL=""
+    if [ -f "$BACKEND_DIR/.env" ]; then
+        DATABASE_URL=$(grep "^DATABASE_URL=" "$BACKEND_DIR/.env" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+    fi
     
-    # Generate a random password
-    PG_EXPORTER_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-20)
-    
-    # Create monitoring user in PostgreSQL
-    sudo -u postgres psql -d bmidb <<EOF
--- Create monitoring user if not exists
-DO \$\$
-BEGIN
-   IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'postgres_exporter') THEN
-      CREATE USER postgres_exporter WITH PASSWORD '$PG_EXPORTER_PASSWORD';
-   END IF;
-END
-\$\$;
-
--- Grant permissions
-ALTER USER postgres_exporter SET SEARCH_PATH TO postgres_exporter,pg_catalog;
-GRANT CONNECT ON DATABASE bmidb TO postgres_exporter;
-GRANT USAGE ON SCHEMA public TO postgres_exporter;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO postgres_exporter;
-GRANT pg_monitor TO postgres_exporter;
-EOF
-    
-    log_success "PostgreSQL monitoring user created"
+    if [ -z "$DATABASE_URL" ]; then
+        log_warning "Could not parse DATABASE_URL from $BACKEND_DIR/.env, using default local fallback"
+        DATABASE_URL="postgresql://postgres_exporter:fallbackpassword@localhost:5432/bmidb?sslmode=disable"
+    else
+        log_success "Database URL successfully parsed from backend configuration!"
+    fi
     
     log_step "Creating environment file..."
     
     cat > /etc/default/postgres_exporter <<EOF
-DATA_SOURCE_NAME="postgresql://postgres_exporter:${PG_EXPORTER_PASSWORD}@localhost:5432/bmidb?sslmode=disable"
+DATA_SOURCE_NAME="$DATABASE_URL"
 EOF
     
     chown postgres_exporter:postgres_exporter /etc/default/postgres_exporter

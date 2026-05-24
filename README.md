@@ -1,37 +1,133 @@
-# Module 6 Assignment — Premium 3-Tier Infrastructure (IaC, CI/CD, Monitoring)
+# Premium 3-Tier AWS Architecture — IaC, CI/CD, and Full-Stack Telemetry
 
-This repository contains the complete implementation for the **DevOps Module 6 Assignment**. The project recreates a manually-deployed 3-tier application architecture using **Terraform (Infrastructure as Code)**, automates deployments using **GitHub Actions (CI/CD)**, and integrates full telemetry visualization using **Prometheus & Grafana**.
-
----
-
-## ✨ Features
-
-- 🏗️ **Modular Terraform IaC**: Secure custom VPC with 6 subnets across multiple Availability Zones, Bastion SSH Gateway, public Application Load Balancer (ALB), and a private RDS PostgreSQL Database.
-- 🔄 **Training IAM Compatibility**: Designed specifically for restricted training credentials, avoiding Secrets Manager and custom IAM policy creations in favor of direct variable injections.
-- 🚀 **GitHub-Hosted CI/CD**: Fully automated delivery pipeline (`runs-on: ubuntu-latest`) deploying frontend React apps to Nginx and backend Node.js APIs to PM2, running SQL schema migrations and automated health checks on every push.
-- 📊 **Dynamic Monitoring Stack**: Preloaded configurations for Prometheus and Grafana, collecting exporter details (Node, PostgreSQL, Nginx, API Business metrics) and mapping them onto interactive Grafana charts.
-- 🖥️ **Premium Direct Access**: Routing is managed through direct HTTP Load Balancer DNS or public IPs without the need for Route53 domain locks or SSL configurations.
+This repository contains the complete modular implementation for the **DevOps Module 6 Assignment**. The project automates the creation of a highly secure, high-availability, 3-tier AWS cloud infrastructure using **Terraform (IaC)**, sets up a secure pipeline using **GitHub Actions (CI/CD)** with SSH ProxyJump, and deploys a comprehensive **Telemetry & Monitoring Stack (Prometheus, Grafana, Loki)**.
 
 ---
 
-## 📂 Repository Structure
+## 📐 Enterprise Architecture Diagram
+
+```mermaid
+graph TD
+    %% External Access
+    User([🌐 End Users]) -->|HTTP Port 80| ALB[⚖️ Application Load Balancer]
+    Developer([💻 DevOps / Developers]) -->|SSH Port 22| Bastion[🛡️ Bastion Host / Monitoring Node]
+    
+    subgraph VPC ["AWS Custom VPC (10.0.0.0/16)"]
+        
+        subgraph Public_Subnets ["Public Subnets (10.0.1.0/24 & 10.0.2.0/24)"]
+            ALB
+            Bastion
+            NAT[🔌 NAT Gateway]
+        end
+        
+        subgraph Private_App_Subnets ["Private App Subnets (10.0.3.0/24 & 10.0.4.0/24)"]
+            Frontend[🖥️ Frontend EC2 - 10.0.4.242]
+            Backend[⚙️ Backend EC2 - 10.0.3.72]
+        end
+
+        subgraph Private_DB_Subnet ["Private Subnet (10.0.3.0/24)"]
+            DB[🗄️ EC2 Private Database - 10.0.3.180]
+        end
+        
+    end
+
+    %% Ingress and Path Routing
+    ALB -->|/api/* or /health| Backend
+    ALB -->|Default /*| Frontend
+    
+    %% Private Internet Routing via NAT
+    Frontend -->|Outbound traffic| NAT
+    Backend -->|Outbound traffic| NAT
+    
+    %% Database Connectivity
+    Backend -->|TCP Port 5432| DB
+    
+    %% SSH ProxyJump / Management
+    Bastion -->|SSH Port 22 - JUMP| Frontend
+    Bastion -->|SSH Port 22 - JUMP| Backend
+    
+    %% Telemetry Architecture
+    subgraph Telemetry_Stack ["Monitoring Suite (Inside Bastion Host)"]
+        Prom[🔥 Prometheus - Port 9090]
+        Grafana[📊 Grafana - Port 3001]
+        Loki[🪵 Grafana Loki - Port 3100]
+    end
+
+    %% Scrapes
+    Prom -.->|Scrapes Node Metrics :9100| Frontend
+    Prom -.->|Scrapes Node & Nginx Metrics :9100, :9113| Backend
+    Prom -.->|Scrapes DB Metrics remotely :9187| Backend
+    Prom -.->|Scrapes Custom App Metrics :9091| Backend
+    
+    %% Log Shipping
+    Backend -.->|Promtail Log Ship :3100| Loki
+    Frontend -.->|Promtail Log Ship :3100| Loki
+    
+    %% Grafana Core Connections
+    Grafana -->|Query Metrics| Prom
+    Grafana -->|Query Logs| Loki
+```
+
+---
+
+## 🗃️ Component Catalogue & Architectural Roles
+
+Our premium 3-tier architecture isolates each layer into its own secure networking domain, utilizing the following core components:
+
+### 1. Networking & Perimeter
+* **AWS Custom VPC (`10.0.0.0/16`)**: The primary boundary isolating all resources. It isolates public assets (ALB, Bastion) from private resources (Frontend, Backend, Database).
+* **Internet Gateway (IGW)**: Connects the VPC to the public internet, enabling ingress to the ALB and Bastion, and egress for public subnets.
+* **NAT Gateway**: Resides in the public subnet, allowing private EC2 instances (Frontend and Backend) to securely reach the internet to fetch npm modules and packages on boot, while completely preventing the public internet from initiating connection directly to them.
+
+### 2. Compute Tier (Private & Secure)
+* **Frontend Instance (Vite + React + Nginx)**:
+  * **Role**: Serves the user interface static bundles.
+  * **Role in Security**: Resides in the private app subnet. Ingress is strictly locked down via Security Groups to accept HTTP traffic **only** from the Application Load Balancer. Direct access from the internet is impossible.
+* **Backend Instance (Node.js Express + PM2)**:
+  * **Role**: Runs the API service.
+  * **Role in Security**: Resides in the private app subnet. Ingress is restricted via Security Groups to accept port `3000` traffic **only** from the Application Load Balancer. It manages DB queries and exposes business telemetry endpoints.
+* **Database Instance (EC2 Private PostgreSQL)**:
+  * **Role**: Private stateful repository holding application schemas and user records.
+  * **Role in Security**: Deployed in a private subnet, bypassing managed AWS RDS subnet constraints. Security groups permit inbound port `5432` traffic **only** from the Backend instance. It has no route to the internet, keeping user data safe.
+
+### 3. Traffic Management
+* **Application Load Balancer (ALB)**:
+  * **Role**: Public-facing entry point. Evaluates incoming request paths on port 80:
+    * `/api/*` and `/health` are routed directly to the Backend EC2 Target Group on Port `3000`.
+    * All other requests (e.g. `/`) default to the Frontend EC2 Target Group on Port `80`.
+* **Bastion Host (Public SSH Gateway)**:
+  * **Role**: The single secure bridge to manage the private resources. SSH access to Frontend, Backend, and DB nodes requires hopping through the Bastion host via **SSH ProxyJump (`-J`)**.
+
+### 4. Telemetry & Monitoring Suite (Co-located on Bastion)
+* **Prometheus (`:9090`)**: Scraping daemon that pulls telemetry data from all exporters on a 15-second loop.
+* **Grafana (`:3001`)**: Premium visualization tool loaded with customized dashboards, querying metrics from Prometheus and logs from Loki.
+* **Grafana Loki (`:3100`)**: High-performance log aggregation engine.
+* **Telemetry Exporters**:
+  * **Node Exporter (`:9100`)**: Measures system stats (CPU, memory, disk, network) of the EC2 hosts.
+  * **Nginx Exporter (`:9113`)**: Monitors active Nginx connections, requests/second, and server performance.
+  * **PostgreSQL Exporter (`:9187`)**: Connects remotely to the DB instance from the Backend host to gather active connections, transaction volumes, and query statistics.
+  * **BMI App Exporter (`:9091`)**: Scraping agent that monitors active backend sessions and application business metrics.
+  * **Promtail (`:9080`)**: Resides on app nodes to capture Nginx, PM2, and system syslog outputs and stream them continuously to Loki.
+
+---
+
+## 📂 Repository Layout
 
 ```
 mahmud_assignment_6/
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml              # CI/CD pipeline using ubuntu-latest and SSH ProxyJump
+│       └── deploy.yml              # CI/CD pipeline using SSH ProxyJump (-J) and remote origin fixes
 ├── src/
 │   ├── frontend/                   # React Vite application
 │   ├── backend/                    # Express Node.js application
-│   └── database/                   # PostgreSQL schema and migrations
+│   └── database/                   # PostgreSQL schema and SQL migrations
 ├── terraform/
 │   ├── modules/
-│   │   ├── vpc/                    # Subnets, route tables, IGW, NAT GW
-│   │   ├── security-groups/        # Security groups for Bastion, ALB, Frontend, Backend, RDS
-│   │   ├── rds/                    # RDS PostgreSQL engine configuration
-│   │   ├── alb/                    # Public ALB (HTTP port 80, path-based routing)
-│   │   └── ec2/                    # EC2 module referencing existing SSH key pairs
+│   │   ├── vpc/                    # Modular network stack (Subnets, NAT GW, IGW)
+│   │   ├── security-group/         # Security groups for Bastion, ALB, Frontend, Backend, RDS
+│   │   ├── alb/                    # Public ALB (HTTP port 80, path-based routing rules)
+│   │   └── ec2/                    # EC2 instances with user_data bootstrapper
 │   └── environments/
 │       └── prod/
 │           ├── main.tf             # Composition orchestrator
@@ -39,31 +135,31 @@ mahmud_assignment_6/
 │           ├── outputs.tf          # Output IP/DNS addresses
 │           └── terraform.tfvars    # Environment configurations (Default ap-south-1)
 ├── monitoring/
-│   ├── prometheus/                 # Prometheus scrape configs
-│   ├── grafana/                    # Grafana dashboards and telemetry
-│   └── scripts/
-│       ├── setup-monitoring.sh     # Setup script for telemetry stack server
-│       └── setup-exporters.sh      # Setup script for application exporters
-├── DEPLOYMENT_GUIDE.md             # Complete step-by-step master setup manual
-└── README.md                       # High-level architecture overview
+│   ├── exporters/                  # Exporter configurations
+│   ├── 3-tier-app/
+│   │   ├── config/                 # Prometheus config, Loki config, and Alert rules
+│   │   ├── dashboards/             # Preloaded telemetry dashboards
+│   │   └── scripts/
+│   │       ├── setup-monitoring-server.sh # Automation setup script for Monitoring server
+│   │       └── setup-application-server.sh  # Automation setup script for Exporters
+│   └── README.md                   # Telemetry guides
+└── README.md                       # Comprehensive system architecture & description
 ```
 
 ---
 
-## ⚡ Quick Start
+## 📝 Subnet Allocation & Networking Details
 
-1. **Configure AWS Credentials**: Make sure your local terminal has access to your training account (`aws configure`).
-2. **Deploy the Infrastructure**:
-   ```bash
-   cd terraform/environments/prod
-   terraform init
-   terraform apply -auto-approve
-   ```
-3. **Configure GitHub Secrets**: Add the required secrets (`EC2_SSH_KEY`, `EC2_BASTION_HOST`, `EC2_FRONTEND_HOST`, `EC2_BACKEND_HOST`, `RDS_HOST`, `DB_PASSWORD`, `ALB_DNS_NAME`) to your GitHub repository secrets.
-4. **Deploy Application**: Push this repository to your GitHub account to trigger the automated Actions runner.
-5. **Set up Monitoring**: Run the telemetry exporter and dashboard scripts to visualize infrastructure and database health.
+Our VPC segregates public and private traffic cleanly across multiple Availability Zones:
 
-For full, step-by-step guidance on setting up, deploying, and verifying each tier, please see the [**Master Deployment Guide** (DEPLOYMENT_GUIDE.md)](file:///d:/1_Office_Document/4.%20Training/DevOps/Ostad/Assignment6/CombineProject/mahmud_assignment_6/DEPLOYMENT_GUIDE.md) included in this repository.
+| Subnet Name | CIDR Block | Route Table | Availability Zone | Primary Resources |
+| :--- | :--- | :--- | :--- | :--- |
+| **`public-1a`** | `10.0.1.0/24` | Public (IGW) | `ap-south-1a` | Bastion Host, NAT Gateway, ALB |
+| **`public-1b`** | `10.0.2.0/24` | Public (IGW) | `ap-south-1b` | ALB Secondary Target |
+| **`private-app-1a`** | `10.0.3.0/24` | Private (NAT GW) | `ap-south-1a` | Backend Server, DB Server |
+| **`private-app-1b`** | `10.0.4.0/24` | Private (NAT GW) | `ap-south-1b` | Frontend Server |
+| **`private-db-1a`** | `10.0.5.0/24` | Isolated (Local) | `ap-south-1a` | Reserved |
+| **`private-db-1b`** | `10.0.6.0/24` | Isolated (Local) | `ap-south-1b` | Reserved |
 
 ---
 
